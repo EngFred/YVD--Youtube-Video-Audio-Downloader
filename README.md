@@ -6,7 +6,7 @@
 ![Hilt](https://img.shields.io/badge/Hilt-Dependency%20Injection-orange?style=for-the-badge)
 ![WorkManager](https://img.shields.io/badge/WorkManager-Background%20Sync-red?style=for-the-badge&logo=android&logoColor=white)
 
-[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.3/yvd_v1.2.3.apk)
+[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.4/yvd_v1.2.4.apk)
 
 **YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos and audio only instantly without the bloat of external binarie and at very fast download speeds.
 YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw stream downloading. This results in instant startup times and a significantly smaller APK size.
@@ -70,12 +70,19 @@ Implemented **WorkManager** with **Foreground Services** to ensure downloads sur
 The UI is driven by a `Sealed Class` state machine to ensure the UI is always in a valid state.
 ```kotlin
 data class HomeState(
+    val urlInput: String = "",
+    val isFormatDialogVisible: Boolean = false,
+    val isCancelDialogVisible: Boolean = false,
+    val isThemeDialogVisible: Boolean = false,
     val isLoading: Boolean = false,
+    val error: String? = null,
     val videoMetadata: VideoMetadata? = null,
     val downloadProgress: Float = 0f,
-    val isDownloading: Boolean = false, // Synced with WorkManager
     val downloadStatusText: String = "",
-    val downloadedFile: File? = null
+    val isDownloading: Boolean = false,
+    val downloadComplete: Boolean = false,
+    val downloadedFile: File? = null,
+    val isAudio: Boolean = false
 )
 ```
 ### 3. Granular Flow Updates
