@@ -1,9 +1,6 @@
 package com.engfred.yvd.ui.downloads
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -13,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,7 +32,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -107,50 +104,51 @@ fun DownloadsScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (uiState.isSelectionMode) {
-                        // GRAMMAR FIX: Also fixed header "1 Selected" vs "Items Selected" if preferred
-                        Text("${uiState.selectedItems.size} Selected")
-                    } else {
-                        Text("My Downloads")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        TopAppBar(
+            title = {
+                if (uiState.isSelectionMode) {
+                    Text("${uiState.selectedItems.size} Selected")
+                } else {
+                    Text("My Downloads")
+                }
+            },
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                titleContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                actionIconContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            navigationIcon = {
+                if (uiState.isSelectionMode) {
+                    IconButton(onClick = { viewModel.clearSelection() }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close Selection")
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                    titleContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
-                    actionIconContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                navigationIcon = {
-                    if (uiState.isSelectionMode) {
-                        IconButton(onClick = { viewModel.clearSelection() }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Close Selection")
-                        }
+                }
+            },
+            actions = {
+                if (uiState.isSelectionMode) {
+                    IconButton(onClick = { viewModel.showDeleteSelectedDialog() }) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Delete Selected")
                     }
-                },
-                actions = {
-                    if (uiState.isSelectionMode) {
-                        IconButton(onClick = { viewModel.showDeleteSelectedDialog() }) {
-                            Icon(Icons.Rounded.Delete, contentDescription = "Delete Selected")
-                        }
-                    } else {
-                        if (uiState.files.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.showDeleteAllDialog() }) {
-                                Icon(Icons.Rounded.DeleteForever, contentDescription = "Delete All")
-                            }
+                } else {
+                    if (uiState.files.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.showDeleteAllDialog() }) {
+                            Icon(Icons.Rounded.DeleteForever, contentDescription = "Delete All")
                         }
                     }
                 }
-            )
-        }
-    ) { padding ->
+            }
+        )
+
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+                .fillMaxWidth()
+                .weight(1f)
         ) {
             if (uiState.files.isEmpty()) {
                 Column(
@@ -222,11 +220,14 @@ fun DownloadsScreen(
                                             .size(56.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                     )
-                                    AnimatedVisibility(visible = isSelected, enter = fadeIn(), exit = fadeOut()) {
+                                    if(isSelected) {
                                         Box(
                                             modifier = Modifier
                                                 .size(56.dp)
-                                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                                .background(
+                                                    Color.Black.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(8.dp)
+                                                ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
@@ -242,7 +243,11 @@ fun DownloadsScreen(
                                 if (!uiState.isSelectionMode) {
                                     Row {
                                         IconButton(onClick = { viewModel.playFile(item) }) {
-                                            Icon(Icons.Rounded.PlayArrow, contentDescription = "play", Modifier.size(34.dp))
+                                            Icon(
+                                                Icons.Rounded.PlayArrow,
+                                                contentDescription = "play",
+                                                Modifier.size(34.dp)
+                                            )
                                         }
                                         IconButton(onClick = { viewModel.shareFile(item) }) {
                                             Icon(Icons.Rounded.Share, contentDescription = "Share")
