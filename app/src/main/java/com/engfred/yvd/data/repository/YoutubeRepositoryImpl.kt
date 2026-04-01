@@ -96,11 +96,37 @@ class YoutubeRepositoryImpl @Inject constructor(
                 )
                 .distinctBy { it.itag }
                 .map { stream ->
+                    // For adaptive (video-only) streams the user ultimately gets video + best audio muxed
+                    // together. We need to account for the audio track size in the displayed estimate,
+                    // otherwise the shown size only reflects the bare video track.
+                    val bestAudioContentLength = if (stream.isVideoOnly) {
+                        extractor.audioStreams
+                            .filter { it.format?.suffix == "m4a" }
+                            .maxByOrNull { it.averageBitrate }
+                            ?.let { audio ->
+                                audio.itagItem?.contentLength?.takeIf { it > 0L }
+                                    ?: ((audio.averageBitrate.toLong() * 1000L * durationSeconds) / 8L)
+                            } ?: 0L
+                    } else 0L
+
+                    val videoContentLength = stream.itagItem?.contentLength ?: -1L
+
+                    val fileSize = if (videoContentLength > 0L) {
+                        // Exact bytes for the video track + exact/estimated audio track.
+                        "%.1f MB".format((videoContentLength + bestAudioContentLength).toDouble() / (1024.0 * 1024.0))
+                    } else {
+                        // No exact length — estimate using average bitrate approximation.
+                        // stream.bitrate is the peak/encoded bitrate; multiplying by 0.70 gives a realistic
+                        // average that matches actual compressed file sizes much more closely.
+                        val estimatedVideoBytes = (stream.bitrate.toLong() * 0.70 * durationSeconds / 8).toLong()
+                        "~%.1f MB".format((estimatedVideoBytes + bestAudioContentLength).toDouble() / (1024.0 * 1024.0))
+                    }
+
                     VideoFormat(
                         formatId = stream.itag.toString(),
                         ext = stream.format?.suffix ?: "mp4",
                         resolution = stream.resolution,
-                        fileSize = estimateFileSize(stream.bitrate.toLong(), durationSeconds),
+                        fileSize = fileSize,
                         fps = stream.resolution.substringAfter("p", "30")
                             .replace(Regex("\\D+"), "").toIntOrNull() ?: 30
                     )
@@ -116,7 +142,13 @@ class YoutubeRepositoryImpl @Inject constructor(
                         formatId = stream.itag.toString(),
                         ext = stream.format?.suffix ?: "m4a",
                         bitrate = "${stream.averageBitrate}kbps",
-                        fileSize = estimateFileSize(stream.bitrate.toLong(), durationSeconds)
+                        fileSize = formatFileSize(
+                            itagContentLength = stream.itagItem?.contentLength ?: -1L,
+                            // averageBitrate is kbps — convert to bps for the estimate.
+                            // Previously used stream.bitrate (peak encoded) which overshoots by ~20-40%.
+                            bitrateBps = stream.averageBitrate.toLong() * 1000L,
+                            durationSec = durationSeconds
+                        )
                     )
                 }
 
@@ -607,6 +639,44 @@ class YoutubeRepositoryImpl @Inject constructor(
     // ─── Utility Helpers ──────────────────────────────────────────────────────
 
     /**
+     * Returns the display file size string shown to the user before a download starts.
+     *
+     * Priority:
+     * 1. [itagContentLength] — the exact byte count embedded in YouTube's itag metadata
+     *    (sourced directly from the player response JSON). This is the ground truth: it matches
+     *    what the CDN will actually deliver and is what YouTube's own client displays.
+     * 2. Bitrate × duration estimate — only used when the itag carries no content-length
+     *    (e.g. older muxed streams where `itagItem` is null or `contentLength == -1`).
+     *    Results are prefixed with `~` so users can tell it's an approximation.
+     *
+     * Previously only the estimate path was used, which consistently overshot real sizes by
+     * 20–40% because `stream.bitrate` reflects the *peak/encoded* bitrate rather than the
+     * true average bitrate of the compressed file.
+     */
+    private fun formatFileSize(
+        itagContentLength: Long,
+        bitrateBps: Long,
+        durationSec: Long
+    ): String {
+        if (itagContentLength > 0L) {
+            return "%.1f MB".format(itagContentLength.toDouble() / (1024.0 * 1024.0))
+        }
+        return estimateFileSize(bitrateBps, durationSec)
+    }
+
+    /**
+     * Fallback size estimate from bitrate × duration.
+     *
+     * Only called when [formatFileSize] cannot source an exact [itagContentLength].
+     * The `~` prefix signals to the user that this is an approximation, not a guaranteed size.
+     */
+    private fun estimateFileSize(bitrateBps: Long, durationSec: Long): String {
+        if (bitrateBps <= 0 || durationSec <= 0) return "Unknown"
+        val bytes = (bitrateBps * durationSec) / 8
+        return "~%.1f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
+    }
+
+    /**
      * Appends YouTube's server-side range parameter to a YouTube CDN URL.
      *
      * Only call this for `googlevideo.com` URLs. Do NOT combine with an HTTP `Range` header —
@@ -624,16 +694,6 @@ class YoutubeRepositoryImpl @Inject constructor(
      */
     private fun fileAlreadyDownloaded(file: File): Boolean =
         file.exists() && file.length() > 1_024L
-
-    /**
-     * Estimates file size from bitrate × duration.
-     * The actual size can differ; the HEAD Content-Length is authoritative during download.
-     */
-    private fun estimateFileSize(bitrateBps: Long, durationSec: Long): String {
-        if (bitrateBps <= 0 || durationSec <= 0) return "Unknown"
-        val bytes = (bitrateBps * durationSec) / 8
-        return "%.1f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
-    }
 
     // ─── Constants ────────────────────────────────────────────────────────────
 
