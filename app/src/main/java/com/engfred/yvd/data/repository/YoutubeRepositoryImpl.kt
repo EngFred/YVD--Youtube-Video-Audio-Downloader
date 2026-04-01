@@ -396,10 +396,19 @@ class YoutubeRepositoryImpl @Inject constructor(
     /**
      * Downloads one byte-range chunk and writes it to the correct offset in [file].
      *
-     * YouTube CDN bypass: `&range=start-end` is appended to the URL. This is a YouTube-specific
-     * server-side range parameter that tells the CDN to begin streaming from [chunk.start],
-     * which bypasses the per-connection bandwidth throttling YouTube applies to adaptive streams.
-     * The HTTP `Range` header is also sent for servers that honour it but not the URL param.
+     * **Range strategy (mutually exclusive — never combine both):**
+     *
+     * - YouTube CDN (`googlevideo.com`): append `&range=start-end` as a URL query parameter.
+     *   The CDN responds with 200 OK containing exactly those bytes (body starts at offset 0
+     *   relative to the range). Sending an HTTP `Range` header alongside causes HTTP 416
+     *   because the header's byte offsets become out-of-bounds inside the already-scoped
+     *   response body.
+     *
+     * - All other servers: send a standard `Range: bytes=start-end` HTTP header and expect
+     *   either 206 Partial Content or 200 OK.
+     *
+     * In both cases [raf] seeks to [ChunkState.start] before writing, so bytes land at
+     * the correct absolute position in the pre-allocated output file.
      */
     private fun downloadChunk(
         url: String,
@@ -412,20 +421,30 @@ class YoutubeRepositoryImpl @Inject constructor(
         flow: ProducerScope<DownloadStatus>,
         statusPrefix: String
     ) {
-        val rangedUrl = appendYouTubeRangeParam(url, chunk.start, chunk.end)
+        val isYouTubeCdn = url.contains("googlevideo.com")
 
-        val request = Request.Builder()
-            .url(rangedUrl)
-            .header("Range", "bytes=${chunk.start}-${chunk.end}")
-            .build()
+        val requestBuilder = Request.Builder()
 
+        if (isYouTubeCdn) {
+            // YouTube CDN: use URL range param only — no Range header.
+            // The CDN streams exactly [start..end] bytes; response body begins at offset 0.
+            requestBuilder.url(appendYouTubeRangeParam(url, chunk.start, chunk.end))
+        } else {
+            // Generic CDN/server: standard HTTP Range header.
+            requestBuilder
+                .url(url)
+                .header("Range", "bytes=${chunk.start}-${chunk.end}")
+        }
+
+        val request = requestBuilder.build()
         val raf = RandomAccessFile(file, "rw")
         raf.seek(chunk.start)
 
         try {
             val response = downloadClient.newCall(request).execute()
-            // 200 OK is acceptable when the server ignores Range (returns full file).
-            // 206 Partial Content is the correct response for a range request.
+            // 200 OK  — server returned full (or ranged) content.
+            // 206 Partial Content — correct for Range-header requests.
+            // Anything else is a real failure.
             if (!response.isSuccessful && response.code != 206) {
                 throw IOException("Chunk $chunkIndex failed with HTTP ${response.code}")
             }
@@ -588,14 +607,11 @@ class YoutubeRepositoryImpl @Inject constructor(
     // ─── Utility Helpers ──────────────────────────────────────────────────────
 
     /**
-     * Appends YouTube's server-side range parameter to CDN URLs.
+     * Appends YouTube's server-side range parameter to a YouTube CDN URL.
      *
-     * YouTube adaptive-stream CDN URLs (googlevideo.com) support `&range=start-end` as a
-     * query parameter. When this is set, the CDN begins streaming from that byte offset
-     * at full bandwidth — bypassing the throttling it applies to long-lived single connections.
-     *
-     * This is used IN ADDITION TO the HTTP `Range` header. On non-YouTube servers the
-     * parameter is harmless (ignored), so this function is safe to call unconditionally.
+     * Only call this for `googlevideo.com` URLs. Do NOT combine with an HTTP `Range` header —
+     * the CDN returns HTTP 416 because the header's offsets are out-of-bounds within
+     * the already byte-scoped response body that the URL param creates.
      */
     private fun appendYouTubeRangeParam(url: String, start: Long, end: Long): String {
         val separator = if (url.contains("?")) "&" else "?"
