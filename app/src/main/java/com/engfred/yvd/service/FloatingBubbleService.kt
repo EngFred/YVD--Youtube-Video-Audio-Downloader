@@ -25,6 +25,7 @@ import androidx.core.app.NotificationCompat
 import com.engfred.yvd.MainActivity
 import kotlin.math.abs
 import android.animation.ValueAnimator.AnimatorUpdateListener
+import com.engfred.yvd.R
 
 /**
  * Foreground service that draws a floating "return to app" bubble over all apps.
@@ -311,7 +312,7 @@ class FloatingBubbleService : Service() {
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle("YV Downloader")
         .setContentText("Tap the bubble to return to the app")
-        .setSmallIcon(android.R.drawable.stat_sys_download)
+        .setSmallIcon(R.mipmap.ic_launcher)
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_MIN)
         .setContentIntent(

@@ -10,7 +10,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.engfred.yvd.domain.model.AppTheme
@@ -28,7 +27,6 @@ import com.engfred.yvd.util.BubblePermissionHelper
 import com.engfred.yvd.util.PreferencesHelper
 import com.engfred.yvd.util.UrlValidator
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -145,9 +143,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (BubblePermissionHelper.canDrawOverlays(this)) {
-            ContextCompat.startForegroundService(this, Intent(this, FloatingBubbleService::class.java))
-        } else {
+        // Only show the permission dialog if overlay permission hasn't been granted yet.
+        // Do NOT start the FloatingBubbleService here — it should only start when the user
+        // taps the YouTube FAB (handled inside openYoutube() via ACTION_SHOW).
+        if (!BubblePermissionHelper.canDrawOverlays(this)) {
             android.app.AlertDialog.Builder(this)
                 .setTitle("Enable Floating Bubble")
                 .setMessage("YV Downloader uses a floating bubble so you can quickly return to the app after copying a YouTube link. Please enable 'Appear on top' on the next screen.")
@@ -159,18 +158,16 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
-    // ... (rest of the file remains unchanged)
     override fun onResume() {
         super.onResume()
         AppLifecycleTracker.isInForeground = true
 
-        if (BubblePermissionHelper.canDrawOverlays(this)) {
-            ContextCompat.startForegroundService(this, Intent(this, FloatingBubbleService::class.java))
-        }
-
-        startService(Intent(this, FloatingBubbleService::class.java).apply {
-            action = FloatingBubbleService.ACTION_HIDE
-        })
+        // Stop the FloatingBubbleService entirely when the app comes to the foreground.
+        // The bubble is only needed when the user has left the app to go to YouTube.
+        // Stopping it here removes the persistent notification and the KB/s status bar icon.
+        // The service will be restarted automatically by openYoutube() via ACTION_SHOW
+        // the next time the user taps the YouTube FAB.
+        stopService(Intent(this, FloatingBubbleService::class.java))
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
