@@ -28,6 +28,7 @@ import com.engfred.yvd.util.BubblePermissionHelper
 import com.engfred.yvd.util.PreferencesHelper
 import com.engfred.yvd.util.UrlValidator
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -68,6 +69,18 @@ class MainActivity : ComponentActivity() {
                 var showUpdateDialog by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
+
+//                    // 🔴 MOCK UPDATE FOR TESTING🔴
+//                    delay(1000) // Slight delay so it pops up after splash screen
+//                    updateInfo = UpdateInfo(
+//                        latestVersion = "9.9.9",
+//                        releaseNotes = "🚀 Massive UI/UX Redesign!\n✨ Added floating navigation bar.\n😎 Premium glassmorphism effects.\n🐛 Fixed minor bugs under the hood.",
+//                        downloadUrl = "https://github.com/EngFred/YV-Downloader",
+//                        htmlUrl = "https://github.com/EngFred/YV-Downloader"
+//                    )
+//                    showUpdateDialog = true
+//                    // 🔴 ----------------------- 🔴
+
                     // 1. Instantly check cached updates using the shared UseCase helper
                     val cachedInfo = PreferencesHelper.getCachedUpdateInfo(this@MainActivity)
                     if (cachedInfo != null && checkForUpdateUseCase.isNewerVersion(cachedInfo.latestVersion, BuildConfig.VERSION_NAME)) {
@@ -146,6 +159,7 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
+    // ... (rest of the file remains unchanged)
     override fun onResume() {
         super.onResume()
         AppLifecycleTracker.isInForeground = true

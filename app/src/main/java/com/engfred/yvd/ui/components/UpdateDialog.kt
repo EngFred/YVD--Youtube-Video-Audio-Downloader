@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.engfred.yvd.BuildConfig
 import com.engfred.yvd.domain.model.UpdateInfo
+import androidx.core.net.toUri
 
 @Composable
 fun UpdateDialog(
@@ -130,7 +131,7 @@ fun UpdateDialog(
 
                     Button(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
+                            val intent = Intent(Intent.ACTION_VIEW, updateInfo.downloadUrl.toUri())
                             context.startActivity(intent)
                             onDownload()
                         },
