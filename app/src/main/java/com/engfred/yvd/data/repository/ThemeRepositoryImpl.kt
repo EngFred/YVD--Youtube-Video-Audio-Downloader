@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
+import androidx.core.content.edit
 
 class ThemeRepositoryImpl @Inject constructor(
     context: Context
@@ -19,7 +20,7 @@ class ThemeRepositoryImpl @Inject constructor(
     override val theme: Flow<AppTheme> = _theme.asStateFlow()
 
     override suspend fun setTheme(theme: AppTheme) {
-        prefs.edit().putString("app_theme", theme.name).apply()
+        prefs.edit { putString("app_theme", theme.name) }
         _theme.value = theme
     }
 

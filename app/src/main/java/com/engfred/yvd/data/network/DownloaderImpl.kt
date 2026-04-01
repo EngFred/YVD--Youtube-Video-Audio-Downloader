@@ -11,42 +11,47 @@ import org.schabi.newpipe.extractor.downloader.Request as NewPipeRequest
 import org.schabi.newpipe.extractor.downloader.Response as NewPipeResponse
 import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
- * Custom Network Bridge for NewPipe Extractor.
+ * Custom network bridge for NewPipe Extractor.
  *
- * This class adapts the NewPipe library's internal networking requests to use
- * our configured [OkHttpClient].
+ * Adapts NewPipe's internal HTTP calls to our shared [OkHttpClient].
  *
- * Key Optimization Features:
- * 1. **Connection Pooling:** Reuses TCP connections to reduce latency (handshake overhead).
- * 2. **Cookie Persistence:** Handles YouTube's GDPR/Consent redirections and prevents infinite loops.
- * 3. **High Timeouts:** Configured to handle unstable mobile networks without premature failure.
+ * **Why @Singleton + @Inject:**
+ * The entire app — NewPipe metadata extraction AND the parallel file downloader
+ * in [com.engfred.yvd.data.repository.YoutubeRepositoryImpl] — shares this single
+ * instance. This guarantees one connection pool and one cookie jar for the lifetime
+ * of the app, which is critical for performance and session consistency.
+ *
+ * [com.engfred.yvd.YVDApplication] calls `NewPipe.init(this)` exactly once.
+ * No other class should ever call `NewPipe.init()`.
+ *
+ * Key optimizations:
+ * - **Connection pooling**: reuses TCP connections, reducing TLS handshake latency.
+ * - **Cookie persistence**: handles YouTube GDPR / consent redirects.
+ * - **Generous timeouts**: resilient on unstable mobile networks.
  */
-class DownloaderImpl : Downloader() {
+@Singleton
+class DownloaderImpl @Inject constructor() : Downloader() {
 
-    // In-memory storage for cookies to handle session redirects
     private val cookieStore = HashMap<String, List<Cookie>>()
 
-    /**
-     * Connection Pool: Keeps up to 5 idle connections alive for 5 minutes.
-     * This drastically improves speed when downloading multiple chunks in parallel.
-     */
     private val connectionPool = ConnectionPool(5, 5, TimeUnit.MINUTES)
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .readTimeout(60, TimeUnit.SECONDS)
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .connectionPool(connectionPool)
-        .retryOnConnectionFailure(true) // Resilience against dropped packets
+        .retryOnConnectionFailure(true)
         .cookieJar(object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
                 cookieStore[url.host] = cookies
             }
-
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                return cookieStore[url.host] ?: ArrayList()
+                return cookieStore[url.host] ?: emptyList()
             }
         })
         .followRedirects(true)
@@ -54,44 +59,42 @@ class DownloaderImpl : Downloader() {
         .build()
 
     /**
-     * Provides access to the underlying OkHttpClient.
-     * Used by the Repository to ensure the actual file downloads share the same
-     * connection pool and cookies as the metadata extraction.
+     * Exposes the underlying [OkHttpClient] so the repository can share
+     * the same connection pool for file downloads.
      */
-    fun getOkHttpClient(): OkHttpClient {
-        return client
-    }
+    fun getOkHttpClient(): OkHttpClient = client
 
     /**
      * Executes a request initiated by the NewPipe Extractor library.
      * Maps NewPipe's [NewPipeRequest] to OkHttp's [Request] and back.
      */
     override fun execute(request: NewPipeRequest): NewPipeResponse {
+        val requestBuilder = Request.Builder().url(request.url())
+
+        // Forward all headers from NewPipe
+        request.headers().forEach { (key, values) ->
+            values.forEach { value -> requestBuilder.addHeader(key, value) }
+        }
+
+        // Inject a desktop User-Agent if missing to prevent bot-detection blocks
+        if (request.headers()["User-Agent"].isNullOrEmpty()) {
+            requestBuilder.header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+        }
+
+        val dataToSend = request.dataToSend()
         val httpMethod = request.httpMethod()
-        val url = request.url()
-        val headers = request.headers()
-        val dataToSend: ByteArray? = request.dataToSend()
 
-        val requestBuilder = Request.Builder().url(url)
-
-        // Transfer Headers
-        headers.forEach { (key, list) ->
-            list.forEach { value -> requestBuilder.addHeader(key, value) }
+        when {
+            dataToSend != null ->
+                requestBuilder.method(httpMethod, dataToSend.toRequestBody(null, 0, dataToSend.size))
+            httpMethod == "POST" || httpMethod == "PUT" ->
+                requestBuilder.method(httpMethod, ByteArray(0).toRequestBody(null, 0, 0))
         }
 
-        // Injecting User-Agent if missing to prevent bot detection
-        if (headers["User-Agent"].isNullOrEmpty()) {
-            requestBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-        }
-
-        // Handle Request Body (POST/PUT)
-        if (dataToSend != null) {
-            requestBuilder.method(httpMethod, dataToSend.toRequestBody(null, 0, dataToSend.size))
-        } else if (httpMethod == "POST" || httpMethod == "PUT") {
-            requestBuilder.method(httpMethod, ByteArray(0).toRequestBody(null, 0, 0))
-        }
-
-        // Execute via OkHttp
         val response = client.newCall(requestBuilder.build()).execute()
 
         return NewPipeResponse(
