@@ -1,6 +1,7 @@
 package com.engfred.yvd.ui.home
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.engfred.yvd.ui.components.*
 import com.engfred.yvd.util.NetworkUtil
@@ -46,6 +48,8 @@ fun HomeScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // State to pause downloads while we ask for permissions or data warnings
+    var pendingSingleFormat by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var pendingPlaylistFormat by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var showDataWarningDialog by remember { mutableStateOf(false) }
 
@@ -53,25 +57,43 @@ fun HomeScreen(
         if (!granted) {
             Toast.makeText(context, "Enable notifications to track downloads", Toast.LENGTH_LONG).show()
         }
-    }
 
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        // 1. Resume single download after permission prompt closes
+        pendingSingleFormat?.let { (formatId, isAudio) ->
+            viewModel.downloadMedia(formatId, isAudio)
+            pendingSingleFormat = null
+        }
+
+        // 2. Resume playlist download after permission prompt closes
+        pendingPlaylistFormat?.let { (formatId, isAudio) ->
+            if (NetworkUtil.isUsingMobileData(context)) {
+                showDataWarningDialog = true // Trigger data warning next if on cellular
+            } else {
+                viewModel.downloadEntirePlaylist(formatId, isAudio)
+                pendingPlaylistFormat = null
+            }
         }
     }
 
+    // FIX: try...finally ensures the error state is ALWAYS cleared, even if you navigate away quickly
     LaunchedEffect(state.error) {
         state.error?.let { message ->
-            snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Long)
-            viewModel.clearError()
+            try {
+                snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Long)
+            } finally {
+                viewModel.clearError()
+            }
         }
     }
 
+    // FIX: try...finally prevents the "Added to queue" snackbar from repeating when navigating back
     LaunchedEffect(state.queuedSnackbarMessage) {
-        state.queuedSnackbarMessage?.let {
-            snackbarHostState.showSnackbar(message = it, duration = SnackbarDuration.Short)
-            viewModel.clearQueuedMessage()
+        state.queuedSnackbarMessage?.let { message ->
+            try {
+                snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
+            } finally {
+                viewModel.clearQueuedMessage()
+            }
         }
     }
 
@@ -166,7 +188,7 @@ fun HomeScreen(
                                 }
                             }
                             IconButton(onClick = {
-                                val clip = clipboardManager.getText()?.text?.toString()
+                                val clip = clipboardManager.getText()?.text
                                 if (!clip.isNullOrBlank()) {
                                     keyboardController?.hide()
                                     viewModel.loadVideoInfo(clip)
@@ -273,15 +295,19 @@ fun HomeScreen(
             metadata = state.videoMetadata!!,
             onDismiss = { viewModel.hideFormatDialog() },
             onFormatSelected = { formatId, isAudio ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // FIX: Check permission before downloading a single video
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    pendingSingleFormat = formatId to isAudio
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    viewModel.downloadMedia(formatId, isAudio)
                 }
-                viewModel.downloadMedia(formatId, isAudio)
             }
         )
     }
 
-    // FIX: Guard Dialog with simplified text and shorter button.
     if (state.showActiveDownloadGuardDialog) {
         ConfirmationDialog(
             title = "Downloads in Progress",
@@ -298,17 +324,25 @@ fun HomeScreen(
             onDismiss = { viewModel.hidePlaylistFormatDialog() },
             onFormatSelected = { formatId, isAudio ->
                 viewModel.hidePlaylistFormatDialog()
-                if (NetworkUtil.isUsingMobileData(context)) {
+
+                // FIX: Check permission before downloading a playlist
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
                     pendingPlaylistFormat = formatId to isAudio
-                    showDataWarningDialog = true
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    viewModel.downloadEntirePlaylist(formatId, isAudio)
+                    if (NetworkUtil.isUsingMobileData(context)) {
+                        pendingPlaylistFormat = formatId to isAudio
+                        showDataWarningDialog = true
+                    } else {
+                        viewModel.downloadEntirePlaylist(formatId, isAudio)
+                    }
                 }
             }
         )
     }
 
-    // FIX: Playlist Data Warning Dialog with shorter button
     if (showDataWarningDialog && pendingPlaylistFormat != null) {
         ConfirmationDialog(
             title = "Mobile Data Warning",

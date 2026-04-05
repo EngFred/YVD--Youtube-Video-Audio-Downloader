@@ -23,7 +23,6 @@ import com.engfred.yvd.ui.onboarding.OnboardingScreen
 import com.engfred.yvd.ui.splash.AnimatedSplashScreen
 import com.engfred.yvd.ui.theme.YVDTheme
 import com.engfred.yvd.util.AppLifecycleTracker
-import com.engfred.yvd.util.BubblePermissionHelper
 import com.engfred.yvd.util.PreferencesHelper
 import com.engfred.yvd.util.UrlValidator
 import dagger.hilt.android.AndroidEntryPoint
@@ -38,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var checkForUpdateUseCase: CheckForUpdateUseCase
 
-    // FIX: State variable to track the last clipboard text we processed
+    // State variable to track the last clipboard text we processed
     private var lastProcessedClipboardText: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,7 +112,6 @@ class MainActivity : ComponentActivity() {
                                     onFinished = {
                                         PreferencesHelper.setOnboardingDone(this@MainActivity)
                                         onboardingDone = true
-                                        showBubblePermissionDialogIfNeeded()
                                     }
                                 )
                             } else {
@@ -135,21 +133,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (PreferencesHelper.isOnboardingDone(this)) {
-            showBubblePermissionDialogIfNeeded()
-        }
-
         handleIncomingIntent(intent)
-    }
-
-    private fun showBubblePermissionDialogIfNeeded() {
-        if (BubblePermissionHelper.canDrawOverlays(this)) return
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Enable Floating Bubble")
-            .setMessage("YV Downloader uses a floating bubble so you can quickly return to the app after copying a YouTube link. Please enable 'Appear on top' on the next screen.")
-            .setPositiveButton("Grant Permission") { _, _ -> BubblePermissionHelper.openOverlaySettings(this) }
-            .setNegativeButton("Not Now", null)
-            .show()
     }
 
     override fun onResume() {
@@ -165,15 +149,20 @@ class MainActivity : ComponentActivity() {
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
 
-        // FIX: Only process the clipboard if it is a valid YouTube link AND it is
-        // completely different from the last link we processed.
-        if (
-            !clip.isNullOrBlank() &&
-            UrlValidator.isValidYouTubeUrl(UrlValidator.sanitize(clip)) &&
-            clip != lastProcessedClipboardText
-        ) {
-            lastProcessedClipboardText = clip // Remember this link
-            homeViewModel.handleIncomingUrl(clip)
+        if (!clip.isNullOrBlank()) {
+            val sanitizedClip = UrlValidator.sanitize(clip)
+            val currentInput = homeViewModel.state.value.urlInput
+
+            // Only trigger if the clipboard link is completely different from the one currently in the search bar.
+            // This prevents the infinite dialog loop when bottom sheets close and the window regains focus.
+            if (
+                UrlValidator.isValidYouTubeUrl(sanitizedClip) &&
+                clip != lastProcessedClipboardText &&
+                sanitizedClip != currentInput
+            ) {
+                lastProcessedClipboardText = clip // Remember this link
+                homeViewModel.handleIncomingUrl(sanitizedClip)
+            }
         }
     }
 
