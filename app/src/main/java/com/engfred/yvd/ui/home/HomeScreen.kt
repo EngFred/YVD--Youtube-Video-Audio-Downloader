@@ -105,177 +105,196 @@ fun HomeScreen(
         )
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("YV Downloader", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.showThemeDialog() },
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Icon(Icons.Rounded.Palette, contentDescription = "Change theme", modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(16.dp), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                TextField(
-                    value = state.urlInput,
-                    onValueChange = { viewModel.onUrlInputChanged(it) },
-                    placeholder = { Text("Paste YouTube link here...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
+    // ─── UI Layout: Box wraps the Scaffold to allow Top-Aligned Snackbars ───
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            // Removed snackbarHost from here so it isn't forced to the bottom
+            topBar = {
+                TopAppBar(
+                    title = { Text("YV Downloader", fontWeight = FontWeight.Bold) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    trailingIcon = {
-                        Row {
-                            if (state.urlInput.isNotBlank()) {
-                                IconButton(onClick = { viewModel.onUrlInputChanged("") }) {
-                                    Icon(Icons.Rounded.Clear, contentDescription = "Clear")
-                                }
-                            }
-                            IconButton(onClick = {
-                                val clip = clipboardManager.getText()?.text
-                                if (!clip.isNullOrBlank()) {
-                                    keyboardController?.hide()
-                                    viewModel.loadVideoInfo(clip)
-                                }
-                            }) {
-                                Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = MaterialTheme.colorScheme.primary)
-                            }
+                    actions = {
+                        IconButton(
+                            onClick = { viewModel.showThemeDialog() },
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Icon(Icons.Rounded.Palette, contentDescription = "Change theme", modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 )
-            }
-
-            AnimatedVisibility(visible = state.urlError != null) {
-                Text(
-                    text = state.urlError ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 8.dp, start = 8.dp).fillMaxWidth()
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            AnimatedVisibility(visible = state.videoMetadata == null && state.playlistMetadata == null) {
-                Button(
-                    onClick = {
-                        keyboardController?.hide()
-                        viewModel.loadVideoInfo(state.urlInput)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp, pressedElevation = 2.dp),
-                    enabled = !state.isLoading && state.urlInput.isNotBlank()
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Fetching Magic...", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    } else {
-                        Text("Get Video Info", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = state.videoMetadata == null && state.playlistMetadata == null && !state.isLoading,
-                enter = fadeIn(), exit = fadeOut()
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 48.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .padding(32.dp)
+                        .shadow(8.dp, RoundedCornerShape(16.dp), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Rounded.RocketLaunch, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text("Ready to Download?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "Tap the red button to open YouTube, grab a link, and paste it above to get started.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 22.sp
+                    TextField(
+                        value = state.urlInput,
+                        onValueChange = { viewModel.onUrlInputChanged(it) },
+                        placeholder = { Text("Paste YouTube link here...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        trailingIcon = {
+                            Row {
+                                if (state.urlInput.isNotBlank()) {
+                                    IconButton(onClick = { viewModel.onUrlInputChanged("") }) {
+                                        Icon(Icons.Rounded.Clear, contentDescription = "Clear")
+                                    }
+                                }
+                                IconButton(onClick = {
+                                    val clip = clipboardManager.getText()?.text
+                                    if (!clip.isNullOrBlank()) {
+                                        keyboardController?.hide()
+                                        viewModel.loadVideoInfo(clip)
+                                    }
+                                }) {
+                                    Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
                     )
                 }
-            }
 
-            state.videoMetadata?.let { metadata ->
+                AnimatedVisibility(visible = state.urlError != null) {
+                    Text(
+                        text = state.urlError ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp, start = 8.dp).fillMaxWidth()
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
-                VideoCard(
-                    metadata = metadata,
-                    onDownloadClick = { viewModel.showFormatDialog() }
-                )
-            }
 
-            state.playlistMetadata?.let { playlist ->
-                Spacer(modifier = Modifier.height(16.dp))
-                PlaylistCard(
-                    metadata = playlist,
-                    onDownloadClick = { viewModel.showPlaylistFormatDialog() }
-                )
-            }
+                AnimatedVisibility(visible = state.videoMetadata == null && state.playlistMetadata == null) {
+                    Button(
+                        onClick = {
+                            keyboardController?.hide()
+                            viewModel.loadVideoInfo(state.urlInput)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp, pressedElevation = 2.dp),
+                        enabled = !state.isLoading && state.urlInput.isNotBlank()
+                    ) {
+                        if (state.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Fetching Magic...", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        } else {
+                            Text("Get Video Info", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(120.dp))
+                AnimatedVisibility(
+                    visible = state.videoMetadata == null && state.playlistMetadata == null && !state.isLoading,
+                    enter = fadeIn(), exit = fadeOut()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 48.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(32.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Rounded.RocketLaunch, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text("Ready to Download?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Tap the red button to open YouTube, grab a link, and paste it above to get started.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 22.sp
+                        )
+                    }
+                }
+
+                state.videoMetadata?.let { metadata ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    VideoCard(
+                        metadata = metadata,
+                        onDownloadClick = { viewModel.showFormatDialog() }
+                    )
+                }
+
+                state.playlistMetadata?.let { playlist ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    PlaylistCard(
+                        metadata = playlist,
+                        onDownloadClick = { viewModel.showPlaylistFormatDialog() }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(120.dp))
+            }
+        }
+
+        // ─── Top-Aligned Snackbar ─────────────────────────────────────────────
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding() // Keeps it clear of the system clock/battery
+                .padding(top = 8.dp) // Slight offset from the top
+        ) { snackbarData ->
+            Snackbar(
+                snackbarData = snackbarData,
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface
+            )
         }
     }
 
+    // ─── Dialogs ──────────────────────────────────────────────────────────────
     if (state.isFormatDialogVisible && state.videoMetadata != null) {
         FormatSelectionSheet(
             metadata = state.videoMetadata!!,
             onDismiss = { viewModel.hideFormatDialog() },
             onFormatSelected = { formatId, isAudio ->
-                // FIX: Check permission before downloading a single video
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                 ) {
@@ -305,7 +324,6 @@ fun HomeScreen(
             onFormatSelected = { formatId, isAudio ->
                 viewModel.hidePlaylistFormatDialog()
 
-                // FIX: Check permission before downloading a playlist
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                 ) {
