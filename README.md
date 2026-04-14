@@ -6,7 +6,7 @@
 ![Hilt](https://img.shields.io/badge/Hilt-Dependency%20Injection-orange?style=for-the-badge)
 ![WorkManager](https://img.shields.io/badge/WorkManager-Background%20Sync-red?style=for-the-badge&logo=android&logoColor=white)
 
-[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD--Youtube-Video-Audio-Downloader?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD--Youtube-Video-Audio-Downloader/releases/download/v1.2.5/YVD-lite.apk)
+[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD--Youtube-Video-Audio-Downloader?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YV-Downloader/releases/download/v2.3.4/YVD_arm64-v8a-release.apk)
 ![Size](https://img.shields.io/badge/Size-2.74_MB-success?style=for-the-badge&logo=android&logoColor=white)
 
 **YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos and audio only instantly without the bloat of external binarie and at very fast download speeds.
