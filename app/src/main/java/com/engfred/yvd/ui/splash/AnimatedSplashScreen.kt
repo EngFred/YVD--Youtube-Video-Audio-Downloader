@@ -135,7 +135,7 @@ fun AnimatedSplashScreen(onFinished: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Engineer Fred 🙂‍↔️",
+                text = "Engineer Fred",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,

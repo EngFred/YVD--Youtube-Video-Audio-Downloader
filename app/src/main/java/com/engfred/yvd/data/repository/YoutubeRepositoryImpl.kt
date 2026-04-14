@@ -152,10 +152,10 @@ class YoutubeRepositoryImpl @Inject constructor(
                     val videoContentLength = stream.itagItem?.contentLength ?: -1L
 
                     val fileSize = if (videoContentLength > 0L) {
-                        "%.1f MB".format((videoContentLength + bestAudioContentLength).toDouble() / (1024.0 * 1024.0))
+                        formatBytes(videoContentLength + bestAudioContentLength)
                     } else {
                         val estimatedVideoBytes = (stream.bitrate.toLong() * 0.70 * durationSeconds / 8).toLong()
-                        "~%.1f MB".format((estimatedVideoBytes + bestAudioContentLength).toDouble() / (1024.0 * 1024.0))
+                        "~${formatBytes(estimatedVideoBytes + bestAudioContentLength)}"
                     }
 
                     VideoFormat(
@@ -787,7 +787,7 @@ class YoutubeRepositoryImpl @Inject constructor(
         durationSec: Long
     ): String {
         if (itagContentLength > 0L) {
-            return "%.1f MB".format(itagContentLength.toDouble() / (1024.0 * 1024.0))
+            return formatBytes(itagContentLength)
         }
         return estimateFileSize(bitrateBps, durationSec)
     }
@@ -795,7 +795,16 @@ class YoutubeRepositoryImpl @Inject constructor(
     private fun estimateFileSize(bitrateBps: Long, durationSec: Long): String {
         if (bitrateBps <= 0 || durationSec <= 0) return "Unknown"
         val bytes = (bitrateBps * durationSec) / 8
-        return "~%.1f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
+        return "~${formatBytes(bytes)}"
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1024L * 1024L * 1024L -> "%.2f GB".format(bytes.toDouble() / (1024.0 * 1024.0 * 1024.0))
+            bytes >= 1024L * 1024L         -> "%.1f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
+            bytes >= 1024L                 -> "%.1f KB".format(bytes.toDouble() / 1024.0)
+            else                           -> "$bytes B"
+        }
     }
 
     private fun appendYouTubeRangeParam(url: String, start: Long, end: Long): String {

@@ -20,8 +20,8 @@ object UrlValidator {
         Regex("^(https?://)?(www\\.|m\\.)?youtube\\.com/watch\\?.*v=[a-zA-Z0-9_-]{11}.*$"),
         Regex("^(https?://)?youtu\\.be/[a-zA-Z0-9_-]{11}.*$"),
         Regex("^(https?://)?(www\\.|m\\.)?youtube\\.com/shorts/[a-zA-Z0-9_-]{11}.*$"),
+        Regex("^(https?://)?(www\\.|m\\.)?youtube\\.com/live/[a-zA-Z0-9_-]{11}.*$"),
     )
-
     private val PLAYLIST_PATTERN =
         Regex("^(https?://)?(www\\.|m\\.)?youtube\\.com/playlist\\?.*list=[\\w\\-]+.*$")
 
